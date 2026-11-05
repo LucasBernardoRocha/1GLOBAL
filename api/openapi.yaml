@@ -1,0 +1,355 @@
+openapi: 3.0.3
+info:
+  title: Devices API
+  version: 1.0.0
+  description: |
+    REST API for creating and managing devices.
+
+    Devices have a server-generated creation timestamp and one of three states:
+    `available`, `in-use` or `inactive`. A device that is `in-use` cannot have
+    its name or brand changed, and cannot be deleted.
+
+    State changes are published through a Server-Sent Events (SSE) stream. This
+    challenge implementation has no authentication; see `docs/decisions.md` for
+    the rationale and the production path.
+servers:
+  - url: http://localhost:8080
+    description: Local Docker Compose environment
+tags:
+  - name: Devices
+    description: Device lifecycle operations
+  - name: Notifications
+    description: State change streaming
+  - name: Operations
+    description: Health and readiness probes
+paths:
+  /v1/devices:
+    get:
+      tags: [Devices]
+      summary: List devices
+      description: Returns all devices, optionally filtered by brand and state.
+      operationId: listDevices
+      parameters:
+        - name: brand
+          in: query
+          required: false
+          description: Exact brand match.
+          schema:
+            type: string
+            example: Apple
+        - name: state
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/DeviceState'
+      responses:
+        '200':
+          description: Devices matching the filters.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Device'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [Devices]
+      summary: Create a device
+      description: |
+        The server generates `id` and `created_at`. If `state` is omitted it
+        defaults to `available`.
+      operationId: createDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDeviceRequest'
+      responses:
+        '201':
+          description: Device created.
+          headers:
+            Location:
+              description: URL of the created device.
+              schema:
+                type: string
+                example: /v1/devices/3f1c7b1e-7d9a-4c1b-9f2e-6a4d8c0b1e23
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v1/devices/{id}:
+    parameters:
+      - $ref: '#/components/parameters/DeviceID'
+    get:
+      tags: [Devices]
+      summary: Get a device
+      operationId: getDevice
+      responses:
+        '200':
+          description: Device found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags: [Devices]
+      summary: Update a device
+      description: |
+        Partial update. Send only the fields that should change. A `PATCH` that
+        includes all mutable fields behaves as a full update.
+
+        `created_at` is immutable. Sending it returns `400 immutable_field`.
+        While the device is `in-use`, sending `name` or `brand` returns
+        `409 device_in_use`; changing only the state is allowed.
+      operationId: updateDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDeviceRequest'
+      responses:
+        '200':
+          description: Updated device.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags: [Devices]
+      summary: Delete a device
+      description: Devices in the `in-use` state cannot be deleted.
+      operationId: deleteDevice
+      responses:
+        '204':
+          description: Device deleted.
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v1/devices/events:
+    get:
+      tags: [Notifications]
+      summary: Stream device state changes
+      description: |
+        Opens a Server-Sent Events stream. Every event is named
+        `device.state_changed` and contains the device ID, previous state, new
+        state and the time the change was committed. Heartbeat comments are
+        sent periodically to keep intermediaries from closing an idle stream.
+
+        Events are only published after the database transaction commits.
+        Replay of missed events after a disconnect or restart is not supported.
+      operationId: streamDeviceStateChanges
+      responses:
+        '200':
+          description: SSE stream.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              example: |
+                event: device.state_changed
+                data: {"device_id":"3f1c7b1e-7d9a-4c1b-9f2e-6a4d8c0b1e23","previous_state":"available","new_state":"in-use","changed_at":"2026-11-05T12:00:00Z"}
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /healthz:
+    get:
+      tags: [Operations]
+      summary: Liveness probe
+      operationId: healthz
+      responses:
+        '200':
+          description: Process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /readyz:
+    get:
+      tags: [Operations]
+      summary: Readiness probe
+      operationId: readyz
+      responses:
+        '200':
+          description: Database is reachable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+components:
+  parameters:
+    DeviceID:
+      name: id
+      in: path
+      required: true
+      description: Device UUID.
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    DeviceState:
+      type: string
+      description: Lifecycle state of a device.
+      enum: [available, in-use, inactive]
+      example: available
+    Device:
+      type: object
+      required: [id, name, brand, state, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 3f1c7b1e-7d9a-4c1b-9f2e-6a4d8c0b1e23
+        name:
+          type: string
+          maxLength: 120
+          example: iPhone 15
+        brand:
+          type: string
+          maxLength: 80
+          example: Apple
+        state:
+          $ref: '#/components/schemas/DeviceState'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Server-generated; immutable after creation.
+          example: '2026-11-05T10:07:00Z'
+    CreateDeviceRequest:
+      type: object
+      required: [name, brand]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          example: iPhone 15
+        brand:
+          type: string
+          minLength: 1
+          maxLength: 80
+          example: Apple
+        state:
+          allOf:
+            - $ref: '#/components/schemas/DeviceState'
+          description: Defaults to `available`.
+    UpdateDeviceRequest:
+      type: object
+      additionalProperties: false
+      description: |
+        Send only the fields that should change. `created_at` is accepted by the
+        decoder only so the API can return a clear immutable-field error.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          example: iPhone 15 Pro
+        brand:
+          type: string
+          minLength: 1
+          maxLength: 80
+          example: Apple
+        state:
+          $ref: '#/components/schemas/DeviceState'
+        created_at:
+          type: string
+          format: date-time
+          description: Immutable; sending this field always returns 400.
+    StateChangedEvent:
+      type: object
+      required: [device_id, previous_state, new_state, changed_at]
+      properties:
+        device_id:
+          type: string
+          format: uuid
+        previous_state:
+          $ref: '#/components/schemas/DeviceState'
+        new_state:
+          $ref: '#/components/schemas/DeviceState'
+        changed_at:
+          type: string
+          format: date-time
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: validation_error
+            message:
+              type: string
+              example: 'name: is required'
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+  responses:
+    ValidationError:
+      description: Invalid request payload, path parameter or query parameter.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Device does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: The device is in use and the operation is not allowed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Unexpected server error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServiceUnavailable:
+      description: A dependency is not ready.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

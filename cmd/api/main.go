@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	openapi "devices-api/api"
 	"devices-api/internal/config"
 	"devices-api/internal/device"
 	"devices-api/internal/notify"
@@ -57,6 +58,11 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	handler.Register(mux)
 	mux.HandleFunc("GET /healthz", platform.Healthz)
 	mux.HandleFunc("GET /readyz", platform.Readyz(pool))
+	mux.HandleFunc("GET /openapi.yaml", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(openapi.OpenAPISpec)
+	})
 
 	httpHandler := platform.RequestID(platform.RequestLogger(logger, platform.Recoverer(logger, mux)))
 
