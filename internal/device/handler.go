@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -26,17 +28,19 @@ type ServiceAPI interface {
 }
 
 type Handler struct {
-	svc    ServiceAPI
-	logger *slog.Logger
+	svc        ServiceAPI
+	subscriber Subscriber
+	logger     *slog.Logger
 }
 
-func NewHandler(svc ServiceAPI, logger *slog.Logger) *Handler {
-	return &Handler{svc: svc, logger: logger}
+func NewHandler(svc ServiceAPI, subscriber Subscriber, logger *slog.Logger) *Handler {
+	return &Handler{svc: svc, subscriber: subscriber, logger: logger}
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/devices", h.create)
 	mux.HandleFunc("GET /v1/devices", h.list)
+	mux.HandleFunc("GET /v1/devices/events", h.events)
 	mux.HandleFunc("GET /v1/devices/{id}", h.get)
 	mux.HandleFunc("PATCH /v1/devices/{id}", h.update)
 	mux.HandleFunc("DELETE /v1/devices/{id}", h.delete)
@@ -128,6 +132,58 @@ func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) events(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		platform.WriteError(w, http.StatusInternalServerError, "streaming_unsupported", "streaming is not supported")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+
+	events, unsubscribe := h.subscriber.Subscribe()
+	defer unsubscribe()
+
+	// The first comment lets clients know the subscription is active.
+	if _, err := fmt.Fprint(w, ": connected\n\n"); err != nil {
+		return
+	}
+	flusher.Flush()
+
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case event, open := <-events:
+			if !open {
+				return
+			}
+			data, err := json.Marshal(event)
+			if err != nil {
+				h.logger.ErrorContext(r.Context(), "encode state event", "error", err)
+				return
+			}
+			if _, err := fmt.Fprintf(w, "event: device.state_changed\ndata: %s\n\n", data); err != nil {
+				return
+			}
+			flusher.Flush()
+		case <-heartbeat.C:
+			// Comment frames keep proxies and clients from timing out.
+			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
+		}
+	}
 }
 
 func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error) {

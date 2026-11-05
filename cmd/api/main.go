@@ -51,7 +51,7 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	broker := notify.NewBroker()
 	repository := device.NewPostgresRepository(pool)
 	service := device.NewService(repository, broker)
-	handler := device.NewHandler(service, logger)
+	handler := device.NewHandler(service, broker, logger)
 
 	mux := http.NewServeMux()
 	handler.Register(mux)
