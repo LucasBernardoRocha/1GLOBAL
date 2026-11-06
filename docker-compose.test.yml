@@ -1,0 +1,34 @@
+name: devices-api-test
+
+services:
+  db-test:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: devices
+      POSTGRES_PASSWORD: devices
+      POSTGRES_DB: devices_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devices -d devices_test"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  tests:
+    image: golang:1.27-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    environment:
+      TEST_DATABASE_URL: postgres://devices:devices@db-test:5432/devices_test?sslmode=disable
+    depends_on:
+      db-test:
+        condition: service_healthy
+    command: ["go", "test", "-count=1", "./..."]
+
+volumes:
+  go-mod-cache:
+  go-build-cache:
