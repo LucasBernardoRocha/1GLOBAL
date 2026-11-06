@@ -20,7 +20,9 @@ func NewService(repo Repository, notifier Notifier) *Service {
 	return &Service{
 		repo:     repo,
 		notifier: notifier,
-		now:      func() time.Time { return time.Now().UTC() },
+		// PostgreSQL timestamptz stores microsecond precision. Truncating here
+		// keeps the create response identical to the persisted value.
+		now: func() time.Time { return time.Now().UTC().Truncate(time.Microsecond) },
 	}
 }
 

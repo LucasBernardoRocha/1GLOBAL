@@ -92,6 +92,7 @@ func TestHandlerCreateRejectsInvalidBodies(t *testing.T) {
 		{name: "malformed json", body: `{`, wantCode: "invalid_request"},
 		{name: "empty body", body: "", wantCode: "invalid_request"},
 		{name: "unknown field", body: `{"name":"iPhone 15","brand":"Apple","created_at":"2025-01-02T03:04:05Z"}`, wantCode: "invalid_request"},
+		{name: "multiple json objects", body: `{"name":"iPhone 15","brand":"Apple"} {}`, wantCode: "invalid_request"},
 		{name: "missing name", body: `{"brand":"Apple"}`, wantCode: "validation_error"},
 		{name: "invalid state", body: `{"name":"iPhone 15","brand":"Apple","state":"lost"}`, wantCode: "validation_error"},
 	}
@@ -163,6 +164,18 @@ func TestHandlerList(t *testing.T) {
 				t.Fatalf("len(devices) = %d, want %d", len(devices), tt.want)
 			}
 		})
+	}
+}
+
+func TestHandlerListEmptyReturnsArray(t *testing.T) {
+	mux, _, _, _ := newTestHandler(t)
+
+	rec := doRequest(t, mux, http.MethodGet, "/v1/devices", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != "[]" {
+		t.Fatalf("body = %q, want []", got)
 	}
 }
 

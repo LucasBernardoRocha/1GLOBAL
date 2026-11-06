@@ -203,8 +203,9 @@ Errors use a consistent JSON envelope:
 | `LOG_LEVEL` | no | `info` | `debug`, `info`, `warn` or `error` |
 | `SHUTDOWN_TIMEOUT` | no | `10s` | Graceful shutdown budget |
 
-The Compose file sets `DATABASE_URL` automatically. For a custom environment,
-see [`.env.example`](.env.example).
+The Compose file sets `DATABASE_URL` automatically. Optional overrides are
+documented in [`.env.example`](.env.example). The container port stays fixed at
+`8080` in Compose; `PORT` is useful when running the binary outside Compose.
 
 ## Development
 
