@@ -11,7 +11,7 @@ Go toolchain all run in Docker, so no local Go installation is required.
 - Server-generated, immutable creation timestamp.
 - Domain rules for devices that are in use.
 - Server-Sent Events (SSE) stream for committed state changes.
-- OpenAPI 3 specification served by the application.
+- OpenAPI 3 specification and offline Swagger UI served by the application.
 - Structured logs, request IDs, health/readiness probes and graceful shutdown.
 - PostgreSQL persistence with embedded migrations and row-level locking.
 - Unit, HTTP, broker and PostgreSQL integration tests.
@@ -38,6 +38,7 @@ docker compose up --build
 
 The API is available at `http://localhost:8080`:
 
+- Swagger UI: `http://localhost:8080/docs/`
 - OpenAPI spec: `http://localhost:8080/openapi.yaml`
 - Liveness: `http://localhost:8080/healthz`
 - Readiness: `http://localhost:8080/readyz`
@@ -60,10 +61,14 @@ docker compose down -v
 | `GET` | `/v1/devices/events` | SSE stream of state changes |
 | `GET` | `/healthz` | Liveness probe |
 | `GET` | `/readyz` | Readiness probe |
+| `GET` | `/docs/` | Interactive Swagger UI |
 | `GET` | `/openapi.yaml` | OpenAPI specification |
 
 The full contract, schemas, examples and status codes are in
-[`api/openapi.yaml`](api/openapi.yaml).
+[`api/openapi.yaml`](api/openapi.yaml). Open `http://localhost:8080/docs/` for
+the interactive version: endpoints can be explored and executed directly from
+the browser with **Try it out**. The UI is embedded in the binary, so it also
+works without internet access.
 
 ### Create a device
 
@@ -244,7 +249,7 @@ internal/device/         domain, service, repository, HTTP handler and tests
 internal/notify/         in-process broker and broker tests
 internal/platform/       database, migrations runner, middleware, health
 migrations/              embedded SQL migrations
-api/                     OpenAPI specification and embedded spec package
+api/                     OpenAPI specification, Swagger UI assets and embedding
 docs/                    architecture and design decisions
 scripts/go.sh            Docker wrapper for the Go toolchain
 ```

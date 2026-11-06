@@ -13,8 +13,8 @@ info:
     challenge implementation has no authentication; see `docs/decisions.md` for
     the rationale and the production path.
 servers:
-  - url: http://localhost:8080
-    description: Local Docker Compose environment
+  - url: /
+    description: Current host, resolved from the request origin
 tags:
   - name: Devices
     description: Device lifecycle operations

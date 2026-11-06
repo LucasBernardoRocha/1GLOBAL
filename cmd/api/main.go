@@ -63,6 +63,7 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(openapi.OpenAPISpec)
 	})
+	mux.Handle("GET /docs/", http.StripPrefix("/docs/", openapi.SwaggerUI()))
 
 	httpHandler := platform.RequestID(platform.RequestLogger(logger, platform.Recoverer(logger, mux)))
 
