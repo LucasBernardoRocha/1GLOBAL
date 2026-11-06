@@ -38,7 +38,7 @@ docker compose up --build
 
 The API is available at `http://localhost:8080`:
 
-- Swagger UI: `http://localhost:8080/docs/`
+- Swagger UI: [http://localhost:8080/docs/](http://localhost:8080/docs/)
 - OpenAPI spec: `http://localhost:8080/openapi.yaml`
 - Liveness: `http://localhost:8080/healthz`
 - Readiness: `http://localhost:8080/readyz`
@@ -65,10 +65,11 @@ docker compose down -v
 | `GET` | `/openapi.yaml` | OpenAPI specification |
 
 The full contract, schemas, examples and status codes are in
-[`api/openapi.yaml`](api/openapi.yaml). Open `http://localhost:8080/docs/` for
-the interactive version: endpoints can be explored and executed directly from
-the browser with **Try it out**. The UI is embedded in the binary, so it also
-works without internet access.
+[`api/openapi.yaml`](api/openapi.yaml). Open
+[http://localhost:8080/docs/](http://localhost:8080/docs/) for the interactive
+version: endpoints can be explored and executed directly from the browser with
+**Try it out**. The UI is embedded in the binary, so it also works without
+internet access.
 
 ### Create a device
 

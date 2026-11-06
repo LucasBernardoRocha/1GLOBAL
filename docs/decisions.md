@@ -123,7 +123,7 @@ and easy to review.
 **Decision:** all Go commands, tests and runtime processes execute in
 containers. The repository does not require a local Go installation.
 
-**Why:** it keeps the developer environment reproducible and matches how the
+**Why:** it keeps my environment reproducible and matches how the
 service is delivered. `scripts/go.sh` wraps the toolchain container, and
 `docker compose` runs the API with PostgreSQL.
 
@@ -141,7 +141,7 @@ its public contract; the repository is tested against the same engine used in
 production. Integration tests skip when `TEST_DATABASE_URL` is not set, so
 `go test ./...` remains usable without Docker.
 
-## Known limitations and next steps
+## Known limitations and possible next steps (Suggestions)
 
 - Add authentication, authorization and rate limiting.
 - Add cursor pagination and a maximum page size.
